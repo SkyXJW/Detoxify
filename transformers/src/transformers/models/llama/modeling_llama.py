@@ -244,6 +244,7 @@ class LlamaAttention(nn.Module):
         attention_mask: Optional[torch.Tensor],
         past_key_value: Optional[Cache] = None,
         cache_position: Optional[torch.LongTensor] = None,
+        truthx_model=None,
         **kwargs: Unpack[FlashAttentionKwargs],
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         input_shape = hidden_states.shape[:-1]
@@ -282,9 +283,17 @@ class LlamaAttention(nn.Module):
             **kwargs,
         )
 
+        #################
+        ## TruthX Code ##
+        #################
+        _attn_output=attn_output.contiguous()
+        # truthx
+        if truthx_model is not None:
+            attn_output=truthx_model.edit(_attn_output)#这里原本是attn_output，但仔细观察后发现，应该是_attn_output才妥当
+
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
         attn_output = self.o_proj(attn_output)
-        return attn_output, attn_weights
+        return attn_output, attn_weights, _attn_output
 
 
 class LlamaDecoderLayer(nn.Module):
@@ -297,6 +306,10 @@ class LlamaDecoderLayer(nn.Module):
         self.mlp = LlamaMLP(config)
         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        #################
+        ## TruthX Code ##
+        #################
+        self.inner={}
 
     def forward(
         self,
@@ -309,13 +322,20 @@ class LlamaDecoderLayer(nn.Module):
         cache_position: Optional[torch.LongTensor] = None,
         position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
         **kwargs: Unpack[FlashAttentionKwargs],
+        truthx_model=None,
+        idx=None,
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
+        #################
+        ## TruthX Code ##
+        #################
+        if truthx_model is not None:
+            truthx_model.cur_layer_id=f"{idx}.attn"
 
         # Self Attention
-        hidden_states, self_attn_weights = self.self_attn(
+        hidden_states, self_attn_weights, _attn_output = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             position_ids=position_ids,
@@ -324,15 +344,32 @@ class LlamaDecoderLayer(nn.Module):
             use_cache=use_cache,
             cache_position=cache_position,
             position_embeddings=position_embeddings,
+            truthx_model=truthx_model,
             **kwargs,
         )
         hidden_states = residual + hidden_states
+        #################
+        ## TruthX Code ##
+        #################
+        self.inner['attn']=hidden_states
+        self.inner['_attn']=_attn_output
 
         # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
+        #################
+        ## TruthX Code ##
+        #################
+        _hidden_states=hidden_states.contiguous()
         hidden_states = residual + hidden_states
+
+        if truthx_model is not None:
+            truthx_model.cur_layer_id=f"{idx}.ffn"
+            hidden_states=residual+truthx_model.edit(_hidden_states)
+
+        self.inner['ffn']=hidden_states
+        self.inner['_ffn']=_hidden_states
 
         outputs = (hidden_states,)
         if output_attentions:
@@ -502,6 +539,7 @@ class LlamaModel(LlamaPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
+        truthx_model=None,
         **flash_attn_kwargs: Unpack[FlashAttentionKwargs],
     ) -> BaseModelOutputWithPast:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
@@ -568,6 +606,9 @@ class LlamaModel(LlamaPreTrainedModel):
                     position_embeddings,
                 )
             else:
+                #################
+                ## TruthX Code ##
+                #################
                 layer_outputs = decoder_layer(
                     hidden_states,
                     attention_mask=causal_mask,
@@ -577,6 +618,8 @@ class LlamaModel(LlamaPreTrainedModel):
                     use_cache=use_cache,
                     cache_position=cache_position,
                     position_embeddings=position_embeddings,
+                    truthx_model=truthx_model,
+                    idx=idx,
                     **flash_attn_kwargs,
                 )
 
@@ -779,6 +822,7 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
         output_hidden_states: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
+        truthx_model=None,
         **kwargs: Unpack[KwargsForCausalLM],
     ) -> CausalLMOutputWithPast:
         r"""
@@ -828,6 +872,7 @@ class LlamaForCausalLM(LlamaPreTrainedModel, GenerationMixin):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             cache_position=cache_position,
+            truthx_model=truthx_model,
             **kwargs,
         )
 
