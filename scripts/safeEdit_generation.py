@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import tqdm
 import sys
-sys.path.append("/home/xjg/myTruthX")
+sys.path.append("/root/autodl-tmp/Detoxify")
 from llava.model import *
 from transformers import (
     AutoModelForCausalLM,
