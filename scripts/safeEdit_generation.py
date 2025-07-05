@@ -180,7 +180,7 @@ def tfqa_generate(
 @torch.inference_mode()
 def main(args):
 
-    with open("/home/xjg/myTruthX/data/dinm/SafeEdit/SafeEdit_test.json", 'r') as file:
+    with open("/root/autodl-tmp/Detoxify/data/dinm/SafeEdit/SafeEdit_test.json", 'r') as file:
         data = json.load(file)
 
     # Load model
@@ -209,7 +209,7 @@ def main(args):
             print(res)
             file.write("\n")
             i += 1
-            if i == 50:
+            if i == 10:
                 break
 
 
