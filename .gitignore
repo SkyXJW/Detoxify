@@ -2,5 +2,6 @@ data/dinm/SafeEdit/SafeEdit_test.json
 data/dinm/SafeEdit/SafeEdit_train.json
 data/dinm/SafeEdit/SafeEdit_val.json
 data/dinm/SafeEdit/llava
+data/dinm/SafeEdit/mistral
 results
 truthx_models/llava-v1.5-7b/
