@@ -253,15 +253,17 @@ class MLPAE(BaseVAE):
         cs = F.cosine_similarity(h_sem_pos, h_sem_neg, dim=-1)
         cs_pos = torch.exp(cs / temperature)
 
+        # trick：由于H_sem要么等于h_sem_pos，要么等于h_sem_neg，再加上H_sem与h_sem_pos或h_sem_neg中的元素同序，
+        # 所以在剔除h_sem_pos或h_sem_neg时，对应的mask掩码一定是对角线上的元素为False，其余都为True
+        mask = ~torch.eye(H_sem.size(0), dtype=torch.bool, device=H_sem.device)
+
         # 计算与负样本 S- 的cosine similarity
         if isPositive:
             # 剔除h_sem_pos
-            mask = ~(h_sem_pos.unsqueeze(1) == H_sem.unsqueeze(0)).all(dim=2)
             H_sem_representations = torch.stack([H_sem[mask[i]] for i in range(mask.size(0))])
             cs = F.cosine_similarity(h_sem_pos.unsqueeze(1), H_sem_representations, dim=2)
         else:
             # 剔除h_sem_neg
-            mask = ~(h_sem_neg.unsqueeze(1) == H_sem.unsqueeze(0)).all(dim=2)
             H_sem_representations = torch.stack([H_sem[mask[i]] for i in range(mask.size(0))])
             cs = F.cosine_similarity(h_sem_neg.unsqueeze(1), H_sem_representations, dim=2)
         cs_neg = torch.exp(cs / temperature).sum(dim = 1)
