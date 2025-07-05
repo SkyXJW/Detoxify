@@ -255,7 +255,7 @@ class MLPAE(BaseVAE):
 
         # trick：由于H_sem要么等于h_sem_pos，要么等于h_sem_neg，再加上H_sem与h_sem_pos或h_sem_neg中的元素同序，
         # 所以在剔除h_sem_pos或h_sem_neg时，对应的mask掩码一定是对角线上的元素为False，其余都为True
-        mask = ~torch.eye(H_sem.size(0), dtype=torch.bool, device=H_sem.device)
+        mask = ~torch.eye(H_sem.size(0), dtype=torch.bool)
 
         # 计算与负样本 S- 的cosine similarity
         if isPositive:
