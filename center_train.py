@@ -20,14 +20,14 @@ model = MLPAE(
     ).to(device)
 
 # 加载训练好的模型权重
-checkpoint = torch.load("/home/xjg/VCD/llava_truthx_model_100epoch_30sample.pt")
+checkpoint = torch.load("/home/xjg/myTruthX/truthx_models/llava-v1.5-7b/llava_truthx_model_100epoch_100sample.pt")
 model.load_state_dict(checkpoint['state_dict'])
 model.eval()
 model.to(device)
 
 # 加载训练数据
-train_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/30_train_common_representations_pos.pth")
-train_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/30_train_common_representations_neg.pth")
+train_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/100_train_common_representations_pos.pth")
+train_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/100_train_common_representations_neg.pth")
 
 # 初始化存储结果的张量
 pos_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in train_data_pos])  # shape: (num_layers, batch_size, latent_dim)
