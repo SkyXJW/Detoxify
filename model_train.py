@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 import ast
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from tqdm import tqdm
 
@@ -276,8 +276,8 @@ class MLPAE(BaseVAE):
 
 if __name__ == "__main__":
     # load训练数据
-    train_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/train_common_representations_pos.pth")
-    train_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/train_common_representations_neg.pth")
+    train_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/100_train_common_representations_pos.pth")
+    train_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/100_train_common_representations_neg.pth")
     train_data_pos = train_data_pos.reshape(-1,train_data_pos.shape[-1])
     train_data_neg = train_data_neg.reshape(-1,train_data_neg.shape[-1])
 
@@ -380,7 +380,7 @@ if __name__ == "__main__":
         'args': args,
         'state_dict': model.state_dict()
     }
-    torch.save(to_save, "llava_truthx_model_100epoch.pt")
+    torch.save(to_save, "llava_truthx_model_100epoch_100sample.pt")
 
     # 绘制train_loss曲线
     plt.figure(figsize=(10, 6))
@@ -390,5 +390,5 @@ if __name__ == "__main__":
     plt.ylabel("Loss")
     plt.legend()
     plt.grid(True)
-    plt.savefig("llava_truthx_model_100epoch_loss_curve.png", dpi=300)
+    plt.savefig("llava_truthx_model_100epoch_100sample.png", dpi=300)
 
