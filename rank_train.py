@@ -1,11 +1,13 @@
 # 与center_train.py文件一样，虽然该文件命名为train，但实际并没有进行训练
 # 只是将训练好的模型用于获取rank
 
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,5,6,7"
+
 from model_train import *
 import torch
+import gc
 
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import torch.nn.functional as F
 
@@ -47,18 +49,35 @@ if __name__ == "__main__":
         ).to(device)
 
     # 加载训练好的模型权重
-    checkpoint = torch.load("/home/xjg/myTruthX/new_checkpoint.pt")
+    checkpoint = torch.load("/home/xjg/myTruthX/truthx_models/llava-v1.5-7b/new_checkpoint.pt")
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     model.to(device)
 
     # 加载训练数据
-    validation_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/66_val_common_representations_pos.pth")
-    validation_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/66_val_common_representations_neg.pth")
+    validation_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/200_val_common_representations_pos.pth")
+    validation_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/200_val_common_representations_neg.pth")
 
-    # 初始化存储结果的张量
-    pos_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in validation_data_pos])  # shape: (num_layers, batch_size, latent_dim)
-    neg_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in validation_data_neg])
+    # # 初始化存储结果的张量
+    # pos_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in validation_data_pos])  # shape: (num_layers, batch_size, latent_dim)
+    # neg_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in validation_data_neg])
+
+    # 分批处理函数
+    def get_latents_batched(data_list):
+        latents = []
+        with torch.no_grad():
+            for layer in data_list:
+                layer = layer.to(device)
+                latent = model.get_truthful_latent_rep(layer)
+                latents.append(latent.cpu())  # 可选：移到CPU释放显存
+                del layer, latent
+                gc.collect()
+                torch.cuda.empty_cache()
+        return torch.stack(latents)  # shape: (num_layers, batch_size, latent_dim)
+
+    # 处理并计算中心向量
+    pos_latents = get_latents_batched(validation_data_pos)
+    neg_latents = get_latents_batched(validation_data_neg)
 
     # 在每一层进行probe
     pos_probe = probe(pos_latents, checkpoint['pos_center'], checkpoint['neg_center'], True)
@@ -84,7 +103,7 @@ if __name__ == "__main__":
         'neg_center': checkpoint['neg_center'],
         'rank': rank_list
     }
-    torch.save(new_checkpoint,"llava_truthx_model_100epoch_100sample.pt")
+    torch.save(new_checkpoint,"llava_truthx_model_100epoch_300sample.pt")
 
 
 
