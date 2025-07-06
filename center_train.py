@@ -1,12 +1,14 @@
 # 虽然该文件命名为train，但实际并没有进行训练
 # 只是将训练好的模型用于获取pos_center与neg_center
+
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,5,6,7"
+
 from model_train import *
 import torch
 
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,4"
-
 import argparse
+import gc
 
 # 模型初始设置
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -20,18 +22,35 @@ model = MLPAE(
     ).to(device)
 
 # 加载训练好的模型权重
-checkpoint = torch.load("/home/xjg/myTruthX/truthx_models/llava-v1.5-7b/llava_truthx_model_100epoch_100sample.pt")
+checkpoint = torch.load("/home/xjg/myTruthX/llava_truthx_model_100epoch_300sample.pt")
 model.load_state_dict(checkpoint['state_dict'])
 model.eval()
 model.to(device)
 
 # 加载训练数据
-train_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/100_train_common_representations_pos.pth")
-train_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/100_train_common_representations_neg.pth")
+train_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/300_train_common_representations_pos.pth")
+train_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/300_train_common_representations_neg.pth")
 
-# 初始化存储结果的张量
-pos_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in train_data_pos])  # shape: (num_layers, batch_size, latent_dim)
-neg_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in train_data_neg])
+# # 初始化存储结果的张量
+# pos_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in train_data_pos])  # shape: (num_layers, batch_size, latent_dim)
+# neg_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in train_data_neg])
+
+# 分批处理函数
+def get_latents_batched(data_list):
+    latents = []
+    with torch.no_grad():
+        for layer in data_list:
+            layer = layer.to(device)
+            latent = model.get_truthful_latent_rep(layer)
+            latents.append(latent.cpu())  # 可选：移到CPU释放显存
+            del layer, latent
+            gc.collect()
+            torch.cuda.empty_cache()
+    return torch.stack(latents)  # shape: (num_layers, batch_size, latent_dim)
+
+# 处理并计算中心向量
+pos_latents = get_latents_batched(train_data_pos)
+neg_latents = get_latents_batched(train_data_neg)
 
 # 计算均值
 pos_center = pos_latents.mean(dim=1)  # shape: (num_layers, latent_dim)
