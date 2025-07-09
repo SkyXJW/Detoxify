@@ -5,3 +5,4 @@ data/dinm/SafeEdit/llava
 data/dinm/SafeEdit/mistral
 results
 truthx_models/llava-v1.5-7b/
+truthx_models/mistral-7b-v0.1/
