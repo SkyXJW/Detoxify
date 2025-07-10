@@ -2,7 +2,7 @@
 # 只是将训练好的模型用于获取rank
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 
 from model_train import *
 import torch
@@ -55,8 +55,8 @@ if __name__ == "__main__":
     model.to(device)
 
     # 加载训练数据
-    validation_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/200_val_common_representations_pos.pth")
-    validation_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/200_val_common_representations_neg.pth")
+    validation_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/333_val_common_representations_pos.pth")
+    validation_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/333_val_common_representations_neg.pth")
 
     # # 初始化存储结果的张量
     # pos_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in validation_data_pos])  # shape: (num_layers, batch_size, latent_dim)
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         'neg_center': checkpoint['neg_center'],
         'rank': rank_list
     }
-    torch.save(new_checkpoint,"mistral_truthx_model_100epoch_300sample.pt")
+    torch.save(new_checkpoint,"mistral_truthx_model_100epoch_500sample.pt")
 
 
 
