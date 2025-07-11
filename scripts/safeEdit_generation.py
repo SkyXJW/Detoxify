@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import tqdm
 import sys
-sys.path.append("/root/autodl-tmp/Detoxify")
+sys.path.append("/home/xjg/myTruthX")
 from llava.model import *
 from transformers import (
     AutoModelForCausalLM,
@@ -43,6 +43,18 @@ A:"""
 PRIMER = """Q: {}
 A:"""
 
+def extract_generated_ids(output_ids, input_ids):
+    """
+    不同模型输出的output_ids中,有的包含了input_ids,而有的又没有,需要统一处理,确保只提取新生成的回答内容的token_id
+    """
+    output_ids = output_ids[0]
+    input_ids = input_ids[0]
+
+    if output_ids[:len(input_ids)].tolist() == input_ids.tolist():
+        return output_ids[len(input_ids):]
+    else:
+        return output_ids
+
 @torch.inference_mode()
 def generate(
     args,
@@ -57,12 +69,7 @@ def generate(
     repetition_penalty=1.0,
 ):
     with torch.no_grad():
-        prompt = (
-            PROF_PRIMER
-            if getattr(args, "fewshot_prompting", False)
-            else PRIMER
-        )
-        prompt = prompt.format(text.strip())
+        prompt = PRIMER.format(text.strip())
 
         inputs = tokenizer([prompt], return_tensors="pt").to(device)
         output_ids = model.generate(
@@ -72,10 +79,11 @@ def generate(
             temperature=temperature,
             repetition_penalty=repetition_penalty,
             max_new_tokens=max_new_tokens,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id
         )
 
-        # output_ids = output_ids[0][len(inputs["input_ids"][0]) :]
-        output_ids = output_ids[0]
+        output_ids = extract_generated_ids(output_ids, inputs["input_ids"])
 
         outputs = tokenizer.decode(
             output_ids,
@@ -105,12 +113,7 @@ def tfqa_generate(
     while max_new_tokens < 1600 and not is_finish:
         with torch.no_grad():
 
-            prompt = (
-                PROF_PRIMER
-                if getattr(args, "fewshot_prompting", False)
-                else PRIMER
-            )
-            prompt = prompt.format(text.strip())
+            prompt = PRIMER.format(text.strip())
 
             inputs = tokenizer([prompt], return_tensors="pt").to(device)
             output_ids = model.generate(
@@ -120,9 +123,11 @@ def tfqa_generate(
                 temperature=temperature,
                 repetition_penalty=repetition_penalty,
                 max_new_tokens=max_new_tokens,
+                eos_token_id=tokenizer.eos_token_id,
+                pad_token_id=tokenizer.pad_token_id
             )
 
-            output_ids = output_ids[0][len(inputs["input_ids"][0]) :]
+            output_ids = extract_generated_ids(output_ids, inputs["input_ids"])
 
             outputs = tokenizer.decode(
                 output_ids,
@@ -145,12 +150,7 @@ def tfqa_generate(
 
     if not_valid:
         with torch.no_grad():
-            prompt = (
-                PROF_PRIMER
-                if getattr(args, "fewshot_prompting", False)
-                else PRIMER
-            )
-            prompt = prompt.format(text.strip())
+            prompt = PRIMER.format(text.strip())
             inputs = tokenizer([prompt], return_tensors="pt").to(device)
 
             output_ids = model.generate(
@@ -159,12 +159,11 @@ def tfqa_generate(
                 temperature=temperature,
                 repetition_penalty=repetition_penalty,
                 max_new_tokens=max_new_tokens,
+                eos_token_id=tokenizer.eos_token_id,
+                pad_token_id=tokenizer.pad_token_id
             )
 
-            if model.config.is_encoder_decoder:
-                output_ids = output_ids[0]
-            else:
-                output_ids = output_ids[0][len(inputs["input_ids"][0]) :]
+            output_ids = extract_generated_ids(output_ids, inputs["input_ids"])
             outputs = tokenizer.decode(
                 output_ids,
                 skip_special_tokens=True,
@@ -180,14 +179,32 @@ def tfqa_generate(
 @torch.inference_mode()
 def main(args):
 
-    with open("/root/autodl-tmp/Detoxify/data/dinm/SafeEdit/SafeEdit_test.json", 'r') as file:
+    with open("/home/xjg/myTruthX/data/dinm/SafeEdit/SafeEdit_test.json", 'r') as file:
         data = json.load(file)
 
     # Load model
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path
     )
-    model = LlavaLlamaForCausalLM.from_pretrained(
+    # 有的模型的tokenizer_config中没有eos_token、pad_token，需手动添加
+    if tokenizer.eos_token is None:
+        tokenizer.eos_token = "</s>" # eos_token的一般形式为</s>
+
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.convert_ids_to_tokens(0) # 一般将token_id=0的token作为pad_token
+    # 有时tokenizer config 中定义了字符串形式的特殊 token，但没有对应的 ID，需手动转一下
+    if tokenizer.eos_token_id is None:
+        tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids(tokenizer.eos_token)
+
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids(tokenizer.pad_token)
+
+    # # For llava
+    # model = LlavaLlamaForCausalLM.from_pretrained(
+    #     args.model_path, device_map="auto", torch_dtype=torch.float16 
+    # )
+    # For mistral
+    model = AutoModelForCausalLM.from_pretrained(
         args.model_path, device_map="auto", torch_dtype=torch.float16 
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -199,7 +216,7 @@ def main(args):
         i = 0
         for item in tqdm.tqdm(data):
             question = item["question"]
-            answer = generate(args=args,tokenizer=tokenizer,model=model,device=device,text=question)
+            answer = tfqa_generate(args=args,tokenizer=tokenizer,model=model,device=device,text=question)
             res = {
                 "id": i,
                 "Question": question,
@@ -209,7 +226,7 @@ def main(args):
             print(res)
             file.write("\n")
             i += 1
-            if i == 10:
+            if i == 333:
                 break
 
 

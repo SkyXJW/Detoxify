@@ -283,15 +283,16 @@ class LlamaAttention(nn.Module):
             **kwargs,
         )
 
+        attn_output = attn_output.reshape(*input_shape, -1).contiguous()
+
         #################
         ## TruthX Code ##
         #################
         _attn_output=attn_output.contiguous()
         # truthx
         if truthx_model is not None:
-            attn_output=truthx_model.edit(_attn_output)#这里原本是attn_output，但仔细观察后发现，应该是_attn_output才妥当
-
-        attn_output = attn_output.reshape(*input_shape, -1).contiguous()
+            attn_output=truthx_model.edit(_attn_output)# 这里原本是attn_output，但仔细观察后发现，应该是_attn_output才妥当
+        
         attn_output = self.o_proj(attn_output)
         return attn_output, attn_weights, _attn_output
 
@@ -589,6 +590,10 @@ class LlamaModel(LlamaPreTrainedModel):
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
 
+        #################
+        ## TruthX Code ##
+        #################
+        idx=0
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
@@ -627,6 +632,8 @@ class LlamaModel(LlamaPreTrainedModel):
 
             if output_attentions:
                 all_self_attns += (layer_outputs[1],)
+
+            idx+=1
 
         hidden_states = self.norm(hidden_states)
 

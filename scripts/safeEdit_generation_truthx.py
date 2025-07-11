@@ -50,6 +50,18 @@ def load_yaml(file_path):
         data = yaml.safe_load(file)
     return data
 
+def extract_generated_ids(output_ids, input_ids):
+    """
+    不同模型输出的output_ids中,有的包含了input_ids,而有的又没有,需要统一处理,确保只提取新生成的回答内容的token_id
+    """
+    output_ids = output_ids[0]
+    input_ids = input_ids[0]
+
+    if output_ids[:len(input_ids)].tolist() == input_ids.tolist():
+        return output_ids[len(input_ids):]
+    else:
+        return output_ids
+
 @torch.inference_mode()
 def generate_truthx(
     args,
@@ -90,13 +102,7 @@ def generate_truthx(
                 top_layers=args.top_layers,
             )
 
-        prompt = (
-            PROF_PRIMER
-            if getattr(args, "fewshot_prompting", False)
-            else PRIMER
-        )
-        prompt = prompt.format(text.strip())
-
+        prompt = PRIMER.format(text.strip())
         inputs = tokenizer([prompt], return_tensors="pt").to(device)
 
         output_ids = model.generate(
@@ -106,18 +112,129 @@ def generate_truthx(
             temperature=temperature,
             repetition_penalty=repetition_penalty,
             max_new_tokens=max_new_tokens,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
             truthx_model=truthx,
         )
 
-        # output_ids = output_ids[0][len(inputs["input_ids"][0]) :]
-        output_ids = output_ids[0]
-
+        output_ids = extract_generated_ids(output_ids, inputs["input_ids"])
         outputs = tokenizer.decode(
             output_ids,
             skip_special_tokens=True,
             spaces_between_special_tokens=False,
         )
         outputs = outputs.strip()
+    if device:
+        torch.cuda.empty_cache()
+    return outputs
+
+@torch.inference_mode()
+def tfqa_generate_truthx(
+    args,
+    tokenizer,
+    model,
+    device,
+    text,
+    max_new_tokens=1024,
+    top_p=1.0,
+    top_k=0,
+    temperature=0.0,
+    repetition_penalty=1.0,
+):
+    max_new_tokens = 50
+    is_finish = False
+    while max_new_tokens < 1600 and not is_finish:
+        with torch.no_grad():
+
+            if getattr(args, "two_fold", False):
+                model_path1 = args.truthx_model
+                model_path2 = args.truthx_model2
+                truthx = TruthX(
+                    model_path1,
+                    model.config.hidden_size,
+                    edit_strength=args.edit_strength,
+                    top_layers=args.top_layers,
+                )
+                truthx2 = TruthX(
+                    model_path2,
+                    model.config.hidden_size,
+                    edit_strength=args.edit_strength,
+                    top_layers=args.top_layers,
+                )
+                fold1_data = load_yaml(args.data_yaml)["data_set"]
+            else:
+                model_path = args.truthx_model
+                truthx = TruthX(
+                    model_path,
+                    model.config.hidden_size,
+                    edit_strength=args.edit_strength,
+                    top_layers=args.top_layers,
+                )
+
+            prompt = PRIMER.format(text.strip())
+            inputs = tokenizer([prompt], return_tensors="pt").to(device)
+
+            output_ids = model.generate(
+                inputs=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                do_sample=False,
+                temperature=temperature,
+                repetition_penalty=repetition_penalty,
+                max_new_tokens=max_new_tokens,
+                eos_token_id=tokenizer.eos_token_id,
+                pad_token_id=tokenizer.pad_token_id,
+                truthx_model=truthx,
+            )
+
+            output_ids = extract_generated_ids(output_ids, inputs["input_ids"])
+
+            outputs = tokenizer.decode(
+                output_ids,
+                skip_special_tokens=True,
+                spaces_between_special_tokens=False,
+            )
+            if "Q:" not in outputs:
+                max_new_tokens = max_new_tokens * 2
+            else:
+                is_finish = True
+            outputs = outputs.split("Q:")[0]
+            outputs = outputs.strip("Q").strip()
+
+    # if outputs is not valid, increase repetition penalty
+    not_valid = False
+    if "Q:" not in outputs:
+        not_valid = True
+    outputs = outputs.split("Q:")[0]
+    outputs = outputs.strip("Q").strip()
+    if outputs == "" or outputs[-1] == ":":
+        not_valid = True
+
+    if not_valid:
+        with torch.no_grad():
+
+            prompt = PRIMER.format(text.strip())
+            inputs = tokenizer([prompt], return_tensors="pt").to(device)
+
+            output_ids = model.generate(
+                inputs=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                do_sample=False,
+                temperature=temperature,
+                repetition_penalty=repetition_penalty,
+                max_new_tokens=max_new_tokens,
+                eos_token_id=tokenizer.eos_token_id,
+                pad_token_id=tokenizer.pad_token_id,
+                truthx_model=truthx,
+            )
+
+            output_ids = extract_generated_ids(output_ids, inputs["input_ids"])
+            outputs = tokenizer.decode(
+                output_ids,
+                skip_special_tokens=True,
+                spaces_between_special_tokens=False,
+            )
+            outputs = outputs.split("Q:")[0]
+            outputs = outputs.strip("Q").strip()
     if device:
         torch.cuda.empty_cache()
     return outputs
@@ -133,7 +250,25 @@ def main(args):
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_path
     )
-    model = LlavaLlamaForCausalLM.from_pretrained(
+    # 有的模型的tokenizer_config中没有eos_token、pad_token，需手动添加
+    if tokenizer.eos_token is None:
+        tokenizer.eos_token = "</s>" # eos_token的一般形式为</s>
+
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.convert_ids_to_tokens(0) # 一般将token_id=0的token作为pad_token
+    # 有时tokenizer config 中定义了字符串形式的特殊 token，但没有对应的 ID，需手动转一下
+    if tokenizer.eos_token_id is None:
+        tokenizer.eos_token_id = tokenizer.convert_tokens_to_ids(tokenizer.eos_token)
+
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.convert_tokens_to_ids(tokenizer.pad_token)
+
+    # # For llava
+    # model = LlavaLlamaForCausalLM.from_pretrained(
+    #     args.model_path, device_map="auto", torch_dtype=torch.float16 
+    # )
+    # For mistral
+    model = AutoModelForCausalLM.from_pretrained(
         args.model_path, device_map="auto", torch_dtype=torch.float16 
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -145,7 +280,7 @@ def main(args):
         i = 0
         for item in tqdm.tqdm(data):
             question = item["question"]
-            answer = generate_truthx(args=args,tokenizer=tokenizer,model=model,device=device,text=question)
+            answer = tfqa_generate_truthx(args=args,tokenizer=tokenizer,model=model,device=device,text=question)
             res = {
                 "id": i,
                 "Question": question,
@@ -155,7 +290,7 @@ def main(args):
             print(res)
             file.write("\n")
             i += 1
-            if i == 50:
+            if i == 333:
                 break
 
 
