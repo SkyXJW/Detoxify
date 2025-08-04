@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 import torch
 from torch import nn
@@ -278,8 +278,8 @@ class MLPAE(BaseVAE):
 
 if __name__ == "__main__":
     # load训练数据
-    train_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/500_train_common_representations_pos.pth")
-    train_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/500_train_common_representations_neg.pth")
+    train_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/500_train_pos.pth")
+    train_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/500_train_neg.pth")
     train_data_pos = train_data_pos.reshape(-1,train_data_pos.shape[-1])
     train_data_neg = train_data_neg.reshape(-1,train_data_neg.shape[-1])
 

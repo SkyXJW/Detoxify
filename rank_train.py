@@ -49,14 +49,14 @@ if __name__ == "__main__":
         ).to(device)
 
     # 加载训练好的模型权重
-    checkpoint = torch.load("/home/xjg/TruthX/new_checkpoint.pt")
+    checkpoint = torch.load("/home/xjg/myTruthX/mistral_truthx_model_100epoch_500sample.pt")
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
     model.to(device)
 
     # 加载训练数据
-    validation_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/333_val_common_representations_pos.pth")
-    validation_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/333_val_common_representations_neg.pth")
+    validation_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/333_val_pos.pth")
+    validation_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/333_val_neg.pth")
 
     # # 初始化存储结果的张量
     # pos_latents = torch.stack([model.get_truthful_latent_rep(layer) for layer in validation_data_pos])  # shape: (num_layers, batch_size, latent_dim)
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         'neg_center': checkpoint['neg_center'],
         'rank': rank_list
     }
-    torch.save(new_checkpoint,"mistral_truthx_model_100epoch_500sample.pt")
+    torch.save(new_checkpoint,"new_checkpoint.pt")
 
 
 

@@ -19,20 +19,21 @@ model = MLPAE(
         truthful_latent_dim=1024,
         semantic_hidden_dims=[2048],
         truthful_hidden_dims=[2048],
-        decoder_hidden_dims=[2048]
-    ).to(device)
+        decoder_hidden_dims=[2048])
+    # ).to(device)
 
 # 加载训练好的模型权重
-checkpoint = torch.load("/home/xjg/myTruthX/llava_truthx_model_100epoch.pt")
+checkpoint = torch.load("/home/xjg/myTruthX/truthx_models/mistral-7b-v0.1/mistral_truthx_model_100epoch_500sample.pt")
 model.load_state_dict(checkpoint['state_dict'])
 model.eval()
-model.to(device)
+# model.to(device)
+print(checkpoint)
 
 # 加载数据
-val_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/val_common_representations_pos.pth")
-val_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/llava/val_common_representations_neg.pth")
+val_data_pos = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/333_val_pos.pth")
+val_data_neg = torch.load("/home/xjg/myTruthX/data/dinm/SafeEdit/mistral/333_val_neg.pth")
 for i in range(64):
-    i = 26
+    i = 56
     # 获取latenr representation(这里仅选择其中一层的数据)
     sem_pos_latents = model.get_semantic_latent_rep(val_data_pos[i]).detach().cpu().numpy()
     sem_neg_latents = model.get_semantic_latent_rep(val_data_neg[i]).detach().cpu().numpy()
