@@ -286,7 +286,7 @@ class TruthX:
             self.ae_model(
                 x,
                 truthful_latent_rep=F.normalize(
-                    x_truthful + delta, p=2, dim=-1
+                    x_truthful + 1.5*delta, p=2, dim=-1 # 新增1.5的超参 控制编辑强度
                 ).type_as(x),
             )[0]
             .contiguous()
@@ -296,7 +296,7 @@ class TruthX:
             self.ae_model(
                 x,
                 truthful_latent_rep=F.normalize(
-                    x_truthful - delta, p=2, dim=-1
+                    x_truthful - 1.5*delta, p=2, dim=-1 # 新增1.5的超参 控制编辑强度
                 ).type_as(x),
             )[0]
             .contiguous()

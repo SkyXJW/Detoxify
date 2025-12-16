@@ -8,14 +8,12 @@ import numpy as np
 
 from transformers import RobertaForSequenceClassification, RobertaTokenizer
 safety_classifier_dir = '/home/xjg/checkpoints/SafeEdit-Safety-Classifier'
-data_path = "/home/xjg/myTruthX/results/safeEdit_generation_truthx/mistral-7b-v0.1_500sample_DS_1.5delta.jsonl"
+DGonlyQ_data_path = "/home/xjg/myTruthX/results/safeEdit_generation_truthx/mistral-7b-v0.1_500sample_DGonlyQ_1.5delta.jsonl"
+DGotherA_data_path = "/home/xjg/myTruthX/results/safeEdit_generation_truthx/mistral-7b-v0.1_500sample_DGotherA_1.5delta.jsonl"
+DGotherQ_data_path = "/home/xjg/myTruthX/results/safeEdit_generation_truthx/mistral-7b-v0.1_500sample_DGotherQ_1.5delta.jsonl"
+DGotherAQ_data_path = "/home/xjg/myTruthX/results/safeEdit_generation_truthx/mistral-7b-v0.1_500sample_DGotherAQ_1.5delta.jsonl"
 
-
-if __name__ == '__main__':
-    # load classifier
-    safety_classifier_model = RobertaForSequenceClassification.from_pretrained(safety_classifier_dir, device_map="auto")
-    safety_classifier_tokenizer = RobertaTokenizer.from_pretrained(safety_classifier_dir)
-
+def classify(data_path):
     # label-0：safe label-1：unsafe
     predict = []
     with open(data_path, 'r', encoding='utf-8') as f:
@@ -35,8 +33,20 @@ if __name__ == '__main__':
                 predict_label = predicted_classes.tolist()
                 # 由于有的回答是空字符串，所以将其标记为0.5
                 predict.append(predict_label[0] if text!="" else 0.5)
-    output_path = "/home/xjg/myTruthX/eval_results/ds/safeEdit_generation_truthx/mistral-7b-v0.1_500sample_1.5delta.txt"
+    return predict
+
+if __name__ == '__main__':
+    # load classifier
+    safety_classifier_model = RobertaForSequenceClassification.from_pretrained(safety_classifier_dir, device_map="auto")
+    safety_classifier_tokenizer = RobertaTokenizer.from_pretrained(safety_classifier_dir)
+
+    DGonlyQ_predic = classify(DGonlyQ_data_path)
+    DGotherA_predic = classify(DGotherA_data_path)
+    DGotherQ_predic = classify(DGotherQ_data_path)
+    DGotherAQ_predic = classify(DGotherAQ_data_path)
+
+    output_path = "/home/xjg/myTruthX/eval_results/dg/safeEdit_generation_truthx/mistral-7b-v0.1_500sample_1.5delta.txt"
     parent_dir = os.path.dirname(output_path)
     os.makedirs(parent_dir, exist_ok=True)
     with open(output_path, "w") as f:
-        f.write(f"{np.mean(predict)}\n")
+        f.write(f"DGonlyQ:{np.mean(DGonlyQ_predic)} DGotherA:{np.mean(DGotherA_predic)} DGotherQ:{np.mean(DGotherQ_predic)} DGotherAQ:{np.mean(DGotherAQ_predic)} DG-Avg:{(np.mean(DGonlyQ_predic)+np.mean(DGotherA_predic)+np.mean(DGotherQ_predic)+np.mean(DGotherAQ_predic))/4}\n")

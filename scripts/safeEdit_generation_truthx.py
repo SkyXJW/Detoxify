@@ -279,18 +279,18 @@ def main(args):
     with open(args.output_file, "w") as file:
         i = 0
         for item in tqdm.tqdm(data):
-            question = item["question"]
+            question = item["adversarial prompt"]
             answer = tfqa_generate_truthx(args=args,tokenizer=tokenizer,model=model,device=device,text=question)
             res = {
                 "id": i,
-                "Question": question,
+                "Input Prompt": question,
                 "Answer": answer,
             }
             json.dump(res, file, ensure_ascii=False)
             print(res)
             file.write("\n")
             i += 1
-            if i == 333:
+            if i == 166:
                 break
 
 
